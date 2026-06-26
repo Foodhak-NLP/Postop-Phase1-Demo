@@ -1170,8 +1170,6 @@ st.caption("Standalone inpatient wound monitoring demo: Layer 1 HMM-style phase 
 
 with st.sidebar:
     st.header("Demo Controls")
-    st.caption(f"App version: `{APP_VERSION}`")
-    st.caption("Standalone file: no external project scripts required.")
 
     scenario_key = st.selectbox("Walkthrough", list(SCENARIOS.keys()), format_func=lambda k: SCENARIOS[k]["label"], index=0)
     demo = SCENARIOS[scenario_key]
