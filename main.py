@@ -1,5 +1,5 @@
 """
-Phase 1 Wound/Tissue Recovery — Streamlit Demo Standalone v011
+Phase 1 Wound/Tissue Recovery — Streamlit Demo Standalone v014
 ================================================================
 
 One-file doctor-facing demo for the three Phase-1 layers only:
@@ -11,7 +11,7 @@ No external project modules are required.
 No Phase-2 logic is included.
 
 Run:
-  streamlit run phase1_wound_recovery_streamlit_demo_standalone_011.py
+  streamlit run phase1_wound_recovery_streamlit_demo_standalone_014.py
 """
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 import pandas as pd
 import streamlit as st
 
-APP_VERSION = "phase1_streamlit_demo_standalone_v011"
+APP_VERSION = "phase1_streamlit_demo_standalone_v014"
 IST = timezone(timedelta(hours=5, minutes=30))
 PHASES = ["haemostasis", "inflammation", "proliferation", "remodelling"]
 SEVERITY_ORDER = {"NONE": 0, "LOW": 1, "MODERATE": 2, "HIGH": 3, "CRITICAL": 4}
@@ -32,7 +32,7 @@ SEVERITY_ORDER = {"NONE": 0, "LOW": 1, "MODERATE": 2, "HIGH": 3, "CRITICAL": 4}
 st.set_page_config(page_title="Phase 1 Wound Recovery Demo", page_icon="🩹", layout="wide")
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# DOCUMENTATION TABLES
+# REFERENCE TABLES
 # ═══════════════════════════════════════════════════════════════════════════════
 
 PHASE_TIMELINE = [
@@ -42,7 +42,7 @@ PHASE_TIMELINE = [
     {"phase": "remodelling", "window": "21+ days", "purpose": "Collagen maturation and tensile strength"},
 ]
 
-PHASE_DOCUMENTATION_ROWS = [
+PHASE_REFERENCE_ROWS = [
     {
         "Phase": "Haemostasis",
         "Duration": "0–3 hours",
@@ -448,7 +448,7 @@ def estimate_healing_phase(state: Mapping[str, Any]) -> Dict[str, Any]:
         flags.append("PERSISTENT_INFLAMMATORY_SIGNAL_AFTER_DAY_5")
     return {
         "status": "completed",
-        "model_version": "standalone_hmm_phase_estimator_v011",
+        "model_version": "standalone_hmm_phase_estimator_v013",
         "current_phase": phase,
         "phase_confidence": round(posterior[idx], 4),
         "phase_posteriors": {PHASES[i]: round(posterior[i], 4) for i in range(4)},
@@ -783,7 +783,7 @@ def run_deviation_detector(state: Mapping[str, Any], layer1: Mapping[str, Any]) 
     escalate = sorted({role for f in flags for role in f.get("recommended_escalation", [])})
     return {
         "status": "completed",
-        "model_version": "standalone_deviation_detector_v011_clinical_rules_plus_single_day_reporting",
+        "model_version": "standalone_deviation_detector_v013_clinical_rules_plus_single_day_reporting",
         "day_post_op": int(day),
         "current_phase_from_layer1": phase,
         "phase_posteriors_from_layer1": layer1.get("phase_posteriors", {}),
@@ -853,6 +853,93 @@ def score_one(nutrient: str, label: str, target_min: float, target_max: float, u
     return {"nutrient": nutrient, "display_name": label, "target": target, "actual": actual, "gap_fraction": round(gap, 4), "gap_pct": round(gap * 100, 1), "adequacy_ratio_capped": round(adequacy, 4), "priority": priority, "status": status, "interpretation": interp, "recommended_escalation": escalation}
 
 
+
+
+def classify_contextual_nutrition_observations(intake: Mapping[str, Any], calories_kcal: float, carb_pct: Optional[float]) -> List[Dict[str, Any]]:
+    """Create visible context notes from non-scored meal totals.
+
+    These observations are deliberately separate from wound-gap scoring. They
+    make the extra nutrition fields reactive in the UI without pretending that
+    every micronutrient has a validated phase-specific wound-healing target.
+    """
+    notes: List[Dict[str, Any]] = []
+
+    def f(key: str, default: float = 0.0) -> float:
+        try:
+            return float(intake.get(key, default) or default)
+        except Exception:
+            return default
+
+    protein_g = f("protein_g")
+    carbs_g = f("carbohydrates_g")
+    fat_g = f("total_fat_g")
+    sugar_g = f("sugar_g")
+    sodium_mg = f("sodium_mg")
+    saturated_fat_g = f("saturated_fat_g")
+    vitamin_d_ug = f("vitamin_d_ug")
+    vitamin_e_mg = f("vitamin_e_mg")
+    iron_mg = f("iron_mg")
+    potassium_mg = f("potassium_mg")
+    calcium_mg = f("calcium_mg")
+
+    if calories_kcal <= 0:
+        notes.append({"area": "overall_intake", "status": "no_energy_logged", "priority": "HIGH", "observation": "No calories were logged for the previous 24 hours.", "use": "Context for dietitian intake-log review."})
+        return notes
+
+    fat_pct = fat_g * 9.0 / calories_kcal * 100.0 if calories_kcal > 0 else None
+    sugar_pct = sugar_g * 4.0 / calories_kcal * 100.0 if calories_kcal > 0 else None
+
+    if carb_pct is not None and carb_pct > 55.0:
+        notes.append({"area": "carbohydrate_distribution", "status": "high_carb_share", "priority": "MODERATE", "observation": f"Carbohydrates provide {carb_pct:.1f}% of calories.", "use": "Recipe selector may shift toward protein/fibre balance, especially if glucose is high."})
+    if sugar_pct is not None and sugar_g > 50.0 and sugar_pct > 10.0:
+        notes.append({"area": "sugar", "status": "high_sugar_context", "priority": "MODERATE", "observation": f"Sugar is {sugar_g:.0f} g, about {sugar_pct:.1f}% of calories.", "use": "Avoid sugar-heavy recovery drinks unless approved."})
+    if fat_pct is not None and fat_pct < 15.0 and calories_kcal < 1800:
+        notes.append({"area": "fat_energy_density", "status": "low_fat_low_energy_context", "priority": "LOW", "observation": f"Fat is {fat_g:.0f} g and total calories are low.", "use": "Energy-density review may be useful if tolerated and permitted."})
+    if saturated_fat_g > 25.0:
+        notes.append({"area": "saturated_fat", "status": "high_saturated_fat_context", "priority": "LOW", "observation": f"Saturated fat is {saturated_fat_g:.0f} g.", "use": "Context only; not a wound-healing gap flag."})
+    if sodium_mg > 2300.0:
+        notes.append({"area": "sodium", "status": "high_sodium_context", "priority": "LOW", "observation": f"Sodium is {sodium_mg:.0f} mg.", "use": "Context for fluid/BP-sensitive patients; physician/dietitian decides relevance."})
+    if vitamin_d_ug == 0:
+        notes.append({"area": "vitamin_d", "status": "not_logged", "priority": "LOW", "observation": "Vitamin D is not logged.", "use": "Tracked for completeness; not part of the phase-specific wound-gap score in this demo."})
+    elif vitamin_d_ug < 10.0:
+        notes.append({"area": "vitamin_d", "status": "low_context", "priority": "LOW", "observation": f"Vitamin D intake is {vitamin_d_ug:.1f} µg.", "use": "Context only unless local protocol defines a target."})
+    if vitamin_e_mg == 0:
+        notes.append({"area": "vitamin_e", "status": "not_logged", "priority": "LOW", "observation": "Vitamin E is not logged.", "use": "Tracked for completeness; not part of the phase-specific wound-gap score in this demo."})
+    if iron_mg > 0 and iron_mg < 8.0:
+        notes.append({"area": "iron", "status": "low_context", "priority": "LOW", "observation": f"Iron intake is {iron_mg:.1f} mg.", "use": "Context only; review if anaemia or local protocol applies."})
+    if potassium_mg > 0 and potassium_mg < 2000.0:
+        notes.append({"area": "potassium", "status": "low_context", "priority": "LOW", "observation": f"Potassium intake is {potassium_mg:.0f} mg.", "use": "Context only; renal/cardiac restrictions must be checked."})
+    if calcium_mg > 0 and calcium_mg < 600.0:
+        notes.append({"area": "calcium", "status": "low_context", "priority": "LOW", "observation": f"Calcium intake is {calcium_mg:.0f} mg.", "use": "Context only; not a wound-gap flag."})
+
+    if not notes:
+        notes.append({"area": "context", "status": "no_context_alerts", "priority": "NONE", "observation": "Additional tracked meal totals do not trigger contextual notes in this demo run.", "use": "Continue routine monitoring."})
+    return notes
+
+
+def find_dominant_nutritional_gap(scores: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    """Choose the gap that should drive the clinical insight and recipe band."""
+    clinical_order = {"protein": 4, "calories": 3, "hydration": 2, "vitamin_c": 1}
+    candidate_scores = []
+    for s in scores:
+        gap = s.get("gap_pct")
+        if gap is None:
+            continue
+        try:
+            gap_f = float(gap)
+        except Exception:
+            continue
+        priority = str(s.get("priority", "NONE"))
+        if priority == "NONE" or gap_f <= 0:
+            continue
+        nutrient = str(s.get("nutrient", ""))
+        candidate_scores.append((SEVERITY_ORDER.get(priority, 0), gap_f, clinical_order.get(nutrient, 0), s))
+    if not candidate_scores:
+        return {"nutrient": None, "display_name": "No major nutrition gap", "gap_pct": 0.0, "priority": "NONE", "status": "adequate"}
+    candidate_scores.sort(key=lambda x: (x[0], x[1], x[2]), reverse=True)
+    chosen = dict(candidate_scores[0][3])
+    return {"nutrient": chosen.get("nutrient"), "display_name": chosen.get("display_name"), "gap_pct": chosen.get("gap_pct"), "priority": chosen.get("priority"), "status": chosen.get("status")}
+
 def run_nutritional_gap_engine(state: Mapping[str, Any], layer1: Mapping[str, Any], layer2: Mapping[str, Any]) -> Dict[str, Any]:
     phase = str(layer1.get("current_phase", "proliferation")).lower()
     targets = TARGETS.get(phase, TARGETS["proliferation"])
@@ -920,15 +1007,19 @@ def run_nutritional_gap_engine(state: Mapping[str, Any], layer1: Mapping[str, An
         priorities.append("MODERATE")
     overall = max(priorities or ["NONE"], key=lambda p: SEVERITY_ORDER.get(p, 0))
     escalate = sorted({role for s in scores for role in s.get("recommended_escalation", [])} | {role for i in interactions for role in i.get("recommended_escalation", [])} | set(nss_escalation))
+    dominant_gap = find_dominant_nutritional_gap(scores)
+    contextual_observations = classify_contextual_nutrition_observations(intake, calories_kcal, carb_pct)
 
     return {
         "status": "completed",
-        "model_version": "standalone_rule_based_nutritional_gap_engine_v011",
+        "model_version": "standalone_rule_based_nutritional_gap_engine_v014",
         "current_phase_from_layer1": phase,
         "previous_24h_intake": {**intake, "protein_g_per_kg": clean_float(protein, 3), "calories_kcal_per_kg": clean_float(calories, 3), "hydration_ml_per_kg": clean_float(hydration, 3), "carbohydrate_percent_calories": clean_float(carb_pct, 1)},
         "active_phase_targets": {k: {"display_name": v[0], "target_min": v[1], "target_max": v[2], "unit": v[3], "scoring_weight": v[4]} for k, v in targets.items()},
         "scored_nutritional_gaps": scores,
         "nutritional_gap_flags": [s for s in scores if s["priority"] in {"LOW", "MODERATE", "HIGH", "CRITICAL"}],
+        "dominant_nutritional_gap": dominant_gap,
+        "contextual_nutrition_observations": contextual_observations,
         "nutritional_sufficiency_score": round(nss, 4) if nss is not None else None,
         "nutritional_sufficiency_status": nss_status,
         "interaction_flags": interactions,
@@ -978,8 +1069,10 @@ def build_clinical_narrative(result: Mapping[str, Any]) -> str:
 def build_macro_recipe_recommendation(result: Mapping[str, Any]) -> Dict[str, Any]:
     """Choose patient-facing demo recipes from the current macro pattern.
 
-    The section shows only the recipe band that matches the current patient. It
-    does not display every possible category at once.
+    v012 fixes the previous behaviour where a high carbohydrate percentage could
+    hide a severe low-protein or low-calorie state. The selection now follows the
+    clinically dominant gap first, and uses carbohydrate distribution only when
+    glucose/carb risk is genuinely the main issue.
     """
     l1 = result["layer1"]
     l2 = result["layer2"]
@@ -988,6 +1081,7 @@ def build_macro_recipe_recommendation(result: Mapping[str, Any]) -> Dict[str, An
     intake = l3.get("previous_24h_intake", {}) or {}
     scores = {g.get("nutrient"): g for g in l3.get("scored_nutritional_gaps", []) or []}
     interactions = l3.get("interaction_flags", []) or []
+    dominant = l3.get("dominant_nutritional_gap", {}) or {}
 
     def as_float(value: Any, default: float = 0.0) -> float:
         try:
@@ -1008,6 +1102,8 @@ def build_macro_recipe_recommendation(result: Mapping[str, Any]) -> Dict[str, An
     calorie_gap = as_float(scores.get("calories", {}).get("gap_pct"), 0.0)
     vitc_gap = as_float(scores.get("vitamin_c", {}).get("gap_pct"), 0.0)
     hydration_gap = as_float(scores.get("hydration", {}).get("gap_pct"), 0.0)
+    dominant_nutrient = str(dominant.get("nutrient") or "").lower()
+    dominant_gap = as_float(dominant.get("gap_pct"), 0.0)
 
     glucose_or_carb_flag = any(
         i.get("interaction_type") == "glucose_dysregulation_plus_high_carbohydrate_load"
@@ -1017,28 +1113,34 @@ def build_macro_recipe_recommendation(result: Mapping[str, Any]) -> Dict[str, An
         for f in l2.get("deviation_flags", []) or []
     )
 
-    if glucose_or_carb_flag or (carb_pct is not None and carb_pct > 55.0) or sugar_g > 60.0:
-        band = "High carbohydrate / glucose review"
-        status = "high_carbohydrate_pattern"
-        trigger = "Carbohydrate/sugar pattern is high or glucose dysregulation is present."
-        clinical_insight = "Review carbohydrate distribution while preserving adequate recovery calories. Do not create an automatic calorie deficit during active wound healing."
+    # Important: a low total intake can make carbohydrate percentage look high.
+    # In that situation, the correct demo behaviour is to fix protein/energy first,
+    # not to show only carbohydrate-review recipes.
+    severe_low_overall = calorie_gap > 30.0 and protein_gap > 30.0
+    high_carb_is_primary = glucose_or_carb_flag or ((carb_pct is not None and carb_pct > 55.0) and not severe_low_overall and calorie_gap <= 30.0) or sugar_g > 60.0
+
+    if severe_low_overall:
+        band = "Low overall intake support"
+        status = "protein_energy_hydration_gap_pattern"
+        trigger = f"Protein gap {protein_gap:.1f}% and calorie gap {calorie_gap:.1f}% are both high; this overrides carbohydrate-percentage selection."
+        clinical_insight = "Protein and energy intake are both substantially below the current wound-healing phase target. Physician/dietitian review should prioritise whether intake can be safely advanced before focusing on carbohydrate distribution."
         recipes = [
             {
-                "title": "Protein-balanced soft thali",
+                "title": "Protein-energy recovery khichdi",
                 "meal_slot": "Lunch or dinner",
-                "patient_text": "Choose a smaller rice or roti portion, add extra dal or paneer/tofu, cooked vegetables, and curd if allowed.",
-                "review_reason": "Shifts the meal toward protein and fibre while keeping energy available for recovery.",
-                "ingredients": ["rice or roti", "dal", "paneer or tofu", "cooked vegetables", "curd"],
+                "patient_text": "Soft moong dal khichdi with paneer or tofu, curd on the side, and a small amount of ghee or olive oil if the care team allows.",
+                "review_reason": "Addresses the combined protein and energy gap in one gentle meal pattern.",
+                "ingredients": ["moong dal", "rice", "paneer or tofu", "curd", "ghee or olive oil if allowed", "soft vegetables"],
             },
             {
-                "title": "Vitamin-C snack without sweet drinks",
-                "meal_slot": "Snack",
-                "patient_text": "Amla or guava slices, or cucumber/bell pepper salad with lemon. Avoid sweet juice unless the care team approves.",
-                "review_reason": "Supports Vitamin C intake without increasing sugar-heavy beverages.",
-                "ingredients": ["amla or guava", "cucumber", "bell pepper", "lemon", "jeera"],
+                "title": "Small high-protein add-on",
+                "meal_slot": "Between meals",
+                "patient_text": "Curd with roasted chana powder, or unsweetened lassi with soft paneer/tofu bites if tolerated.",
+                "review_reason": "Adds protein without relying on a large meal when appetite is low.",
+                "ingredients": ["curd", "roasted chana", "paneer or tofu", "water", "jeera"],
             },
         ]
-    elif protein_gap > 15.0:
+    elif dominant_nutrient == "protein" or protein_gap > 15.0:
         band = "Low protein support"
         status = "protein_gap_pattern"
         trigger = f"Protein is {protein_gap:.1f}% below the current phase target."
@@ -1059,7 +1161,7 @@ def build_macro_recipe_recommendation(result: Mapping[str, Any]) -> Dict[str, An
                 "ingredients": ["curd", "roasted chana", "jeera", "small pinch of salt if allowed"],
             },
         ]
-    elif calorie_gap > 15.0:
+    elif dominant_nutrient == "calories" or calorie_gap > 15.0:
         band = "Low calorie / energy support"
         status = "calorie_gap_pattern"
         trigger = f"Calories are {calorie_gap:.1f}% below the current phase target."
@@ -1080,7 +1182,49 @@ def build_macro_recipe_recommendation(result: Mapping[str, Any]) -> Dict[str, An
                 "ingredients": ["curd", "banana", "milk or water", "cinnamon if allowed"],
             },
         ]
-    elif vitc_gap > 15.0:
+    elif high_carb_is_primary:
+        band = "High carbohydrate / glucose review"
+        status = "high_carbohydrate_pattern"
+        trigger = "Carbohydrate/sugar pattern is high or glucose dysregulation is present."
+        clinical_insight = "Review carbohydrate distribution while preserving adequate recovery calories. Do not create an automatic calorie deficit during active wound healing."
+        recipes = [
+            {
+                "title": "Protein-balanced soft thali",
+                "meal_slot": "Lunch or dinner",
+                "patient_text": "Choose a smaller rice or roti portion, add extra dal or paneer/tofu, cooked vegetables, and curd if allowed.",
+                "review_reason": "Shifts the meal toward protein and fibre while keeping energy available for recovery.",
+                "ingredients": ["rice or roti", "dal", "paneer or tofu", "cooked vegetables", "curd"],
+            },
+            {
+                "title": "Vitamin-C snack without sweet drinks",
+                "meal_slot": "Snack",
+                "patient_text": "Amla or guava slices, or cucumber/bell pepper salad with lemon. Avoid sweet juice unless the care team approves.",
+                "review_reason": "Supports Vitamin C intake without increasing sugar-heavy beverages.",
+                "ingredients": ["amla or guava", "cucumber", "bell pepper", "lemon", "jeera"],
+            },
+        ]
+    elif dominant_nutrient == "hydration" or hydration_gap > 0.0:
+        band = "Low hydration support"
+        status = "hydration_gap_pattern"
+        trigger = f"Hydration is {hydration_gap:.1f}% below the current phase target."
+        clinical_insight = "Fluid intake is below the target; tolerance and restrictions should be reviewed."
+        recipes = [
+            {
+                "title": "Clear soup schedule",
+                "meal_slot": "Between meals",
+                "patient_text": "Small portions of clear vegetable soup across the day if fluids are allowed.",
+                "review_reason": "Improves fluid intake without forcing large volumes at once.",
+                "ingredients": ["clear vegetable stock", "bottle gourd or carrot", "small pinch of salt if allowed"],
+            },
+            {
+                "title": "Buttermilk or curd drink",
+                "meal_slot": "Afternoon",
+                "patient_text": "Unsweetened buttermilk or thin curd drink if tolerated and permitted.",
+                "review_reason": "Supports hydration and tolerance, especially when appetite is low.",
+                "ingredients": ["curd", "water", "roasted cumin", "mint if allowed"],
+            },
+        ]
+    elif dominant_nutrient == "vitamin_c" or vitc_gap > 15.0:
         band = "Low Vitamin C support"
         status = "vitamin_c_gap_pattern"
         trigger = f"Vitamin C is {vitc_gap:.1f}% below the current phase target."
@@ -1099,27 +1243,6 @@ def build_macro_recipe_recommendation(result: Mapping[str, Any]) -> Dict[str, An
                 "patient_text": "Cucumber, bell pepper, and lemon dressing; keep it soft/cooked if raw foods are restricted.",
                 "review_reason": "Adds Vitamin C alongside the main meal.",
                 "ingredients": ["cucumber", "bell pepper", "lemon", "soft cooked vegetables if raw foods are restricted"],
-            },
-        ]
-    elif hydration_gap > 0.0:
-        band = "Low hydration support"
-        status = "hydration_gap_pattern"
-        trigger = f"Hydration is {hydration_gap:.1f}% below the current phase target."
-        clinical_insight = "Fluid intake is slightly below the target; tolerance and restrictions should be reviewed."
-        recipes = [
-            {
-                "title": "Clear soup schedule",
-                "meal_slot": "Between meals",
-                "patient_text": "Small portions of clear vegetable soup across the day if fluids are allowed.",
-                "review_reason": "Improves fluid intake without forcing large volumes at once.",
-                "ingredients": ["clear vegetable stock", "bottle gourd or carrot", "small pinch of salt if allowed"],
-            },
-            {
-                "title": "Buttermilk or curd drink",
-                "meal_slot": "Afternoon",
-                "patient_text": "Unsweetened buttermilk or thin curd drink if tolerated and permitted.",
-                "review_reason": "Supports hydration and tolerance, especially when appetite is low.",
-                "ingredients": ["curd", "water", "roasted cumin", "mint if allowed"],
             },
         ]
     else:
@@ -1155,6 +1278,7 @@ def build_macro_recipe_recommendation(result: Mapping[str, Any]) -> Dict[str, An
         "status": status,
         "trigger": trigger,
         "macro_line": macro_line,
+        "dominant_gap": dominant,
         "clinical_insight": clinical_insight,
         "recipes": recipes,
         "safety_note": "Patient-facing demo wording only. Physician/dietitian approval is required before changing any diet plan.",
@@ -1165,12 +1289,11 @@ def build_macro_recipe_recommendation(result: Mapping[str, Any]) -> Dict[str, An
 # STREAMLIT UI
 # ═══════════════════════════════════════════════════════════════════════════════
 
-st.markdown("##Phase 1 Wound/Tissue Recovery Demo")
+st.markdown("#  Phase 1 Wound/Tissue Recovery Demo")
 st.caption("Standalone inpatient wound monitoring demo: Layer 1 HMM-style phase estimation → Layer 2 responsive trajectory deviation detection → Layer 3 rule-based nutrition gap scoring.")
 
 with st.sidebar:
     st.header("Demo Controls")
-
     scenario_key = st.selectbox("Walkthrough", list(SCENARIOS.keys()), format_func=lambda k: SCENARIOS[k]["label"], index=0)
     demo = SCENARIOS[scenario_key]
     st.info(demo["description"])
@@ -1307,7 +1430,7 @@ with c2:
 
 st.markdown("### Four phase states considered by Layer 1")
 phase_doc_cols = st.columns(4)
-for idx, row in enumerate(PHASE_DOCUMENTATION_ROWS):
+for idx, row in enumerate(PHASE_REFERENCE_ROWS):
     ph_key = str(row["Phase"]).lower()
     posterior_value = float((l1.get("phase_posteriors", {}) or {}).get(ph_key, 0.0))
     with phase_doc_cols[idx]:
@@ -1367,29 +1490,35 @@ with gap_cols[1]: st.metric("Intake period", "previous 24h")
 with gap_cols[2]: st.metric("Scored nutrients", len(l3.get("scored_nutritional_gaps", []) or []))
 with gap_cols[3]: st.metric("Interactions", len(l3.get("interaction_flags", []) or []))
 
-st.markdown("**Nutrition source used by Layer 3**")
-tracked_rows = [
-    {"field": "total_calories", "internal_key": "calories_kcal", "value": intake.get("calories_kcal"), "layer3_use": "scored for wound target"},
-    {"field": "total_carbohydrates", "internal_key": "carbohydrates_g", "value": intake.get("carbohydrates_g"), "layer3_use": "carbohydrate pattern + recipe context"},
-    {"field": "total_protein", "internal_key": "protein_g", "value": intake.get("protein_g"), "layer3_use": "scored after g/kg conversion"},
-    {"field": "total_fat", "internal_key": "total_fat_g", "value": intake.get("total_fat_g"), "layer3_use": "tracked for context"},
-    {"field": "total_calcium", "internal_key": "calcium_mg", "value": intake.get("calcium_mg"), "layer3_use": "tracked for context"},
-    {"field": "total_cholesterol", "internal_key": "cholesterol_mg", "value": intake.get("cholesterol_mg"), "layer3_use": "tracked for context"},
-    {"field": "total_iron", "internal_key": "iron_mg", "value": intake.get("iron_mg"), "layer3_use": "tracked for context"},
-    {"field": "total_potassium", "internal_key": "potassium_mg", "value": intake.get("potassium_mg"), "layer3_use": "tracked for context"},
-    {"field": "total_saturated_fat", "internal_key": "saturated_fat_g", "value": intake.get("saturated_fat_g"), "layer3_use": "tracked for context"},
-    {"field": "total_sodium", "internal_key": "sodium_mg", "value": intake.get("sodium_mg"), "layer3_use": "tracked for context"},
-    {"field": "total_sugar", "internal_key": "sugar_g", "value": intake.get("sugar_g"), "layer3_use": "sugar/carb recipe context"},
-    {"field": "total_vitamin_c", "internal_key": "vitamin_c_mg", "value": intake.get("vitamin_c_mg"), "layer3_use": "scored for wound target"},
-    {"field": "total_vitamin_d", "internal_key": "vitamin_d_ug", "value": intake.get("vitamin_d_ug"), "layer3_use": "tracked for context"},
-    {"field": "total_vitamin_e", "internal_key": "vitamin_e_mg", "value": intake.get("vitamin_e_mg"), "layer3_use": "tracked for context"},
-    {"field": "total_nutrient_value", "internal_key": "total_nutrient_value", "value": intake.get("total_nutrient_value"), "layer3_use": "tracked for context"},
-    {"field": "hydration", "internal_key": "hydration_ml", "value": intake.get("hydration_ml"), "layer3_use": "scored after ml/kg conversion"},
-]
-st.dataframe(pd.DataFrame(tracked_rows), hide_index=True, use_container_width=True)
+# v012: make the nutrition result visibly reactive, not only hidden in tables.
+dominant_gap = l3.get("dominant_nutritional_gap", {}) or {}
+context_notes = l3.get("contextual_nutrition_observations", []) or []
+react_cols = st.columns(4)
+with react_cols[0]:
+    st.metric("Dominant nutrition gap", dominant_gap.get("display_name") or "None")
+with react_cols[1]:
+    st.metric("Dominant gap %", dominant_gap.get("gap_pct"))
+with react_cols[2]:
+    st.metric("Dominant priority", f"{priority_icon(dominant_gap.get('priority'))} {dominant_gap.get('priority')}")
+with react_cols[3]:
+    st.metric("Context notes", len(context_notes))
+
+st.markdown("**Primary nutrition values used by Layer 3**")
+primary_cols = st.columns(5)
+with primary_cols[0]:
+    st.metric("Protein", f"{clean_float(intake.get('protein_g_per_kg'), 2)} g/kg", f"total {clean_float(intake.get('protein_g'), 1)} g")
+with primary_cols[1]:
+    st.metric("Calories", f"{clean_float(intake.get('calories_kcal_per_kg'), 1)} kcal/kg", f"total {clean_float(intake.get('calories_kcal'), 0)} kcal")
+with primary_cols[2]:
+    st.metric("Vitamin C", f"{clean_float(intake.get('vitamin_c_mg'), 0)} mg", "previous 24h")
+with primary_cols[3]:
+    st.metric("Hydration", f"{clean_float(intake.get('hydration_ml_per_kg'), 1)} ml/kg", f"total {clean_float(intake.get('hydration_ml'), 0)} ml")
+with primary_cols[4]:
+    st.metric("Carb share", f"{clean_float(intake.get('carbohydrate_percent_calories'), 1)}%", f"carbs {clean_float(intake.get('carbohydrates_g'), 0)} g")
+
 st.caption(
-    "Only nutrients with phase-specific wound-healing targets are scored as Layer-3 gaps. "
-    "Other meal totals are still captured for context and recipe selection, but they are not converted into wound-healing gap flags unless the clinical rule table defines a target."
+    "The sidebar still lets you adjust all meal totals. The main Layer-3 UI shows only the primary wound-healing values: "
+    "protein, calories, Vitamin C, hydration, and carbohydrate share. Extra fields such as fat, sugar, sodium, Vitamin D, and Vitamin E are kept in the background for recipe/context logic."
 )
 
 gap_rows = []
@@ -1433,8 +1562,26 @@ with summary_cols[1]:
 with summary_cols[2]:
     st.metric("Selection logic", recipe_pick["status"].replace("_", " "))
 
-st.write(f"- {recipe_pick['macro_line']}")
-st.write(f"- Selection trigger: {recipe_pick['trigger']}")
+st.markdown("### Macro decision summary")
+dg = recipe_pick.get("dominant_gap") or {}
+dominant_gap_text = f"{dg.get('display_name', 'No major nutrition gap')} ({dg.get('gap_pct', 0.0)}% gap, {dg.get('priority', 'NONE')})"
+with st.container(border=True):
+    st.markdown("**Macro snapshot**")
+    st.info(recipe_pick["macro_line"])
+
+    st.markdown("**Dominant Layer-3 gap**")
+    if str(dg.get("priority", "NONE")).upper() in {"HIGH", "CRITICAL"}:
+        st.error(dominant_gap_text)
+    elif str(dg.get("priority", "NONE")).upper() == "MODERATE":
+        st.warning(dominant_gap_text)
+    elif str(dg.get("priority", "NONE")).upper() == "LOW":
+        st.info(dominant_gap_text)
+    else:
+        st.success(dominant_gap_text)
+
+    st.markdown("**Selection trigger**")
+    st.info(recipe_pick["trigger"])
+
 st.warning("Patient-facing recipes are demo suggestions only. They must be checked and approved by the physician/dietitian before use.")
 
 st.markdown("### Patient-facing recipe ideas for this macro pattern")
