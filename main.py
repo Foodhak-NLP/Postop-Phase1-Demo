@@ -1165,7 +1165,7 @@ def build_macro_recipe_recommendation(result: Mapping[str, Any]) -> Dict[str, An
 # STREAMLIT UI
 # ═══════════════════════════════════════════════════════════════════════════════
 
-st.markdown("#Phase 1 Wound/Tissue Recovery Demo")
+st.markdown("##Phase 1 Wound/Tissue Recovery Demo")
 st.caption("Standalone inpatient wound monitoring demo: Layer 1 HMM-style phase estimation → Layer 2 responsive trajectory deviation detection → Layer 3 rule-based nutrition gap scoring.")
 
 with st.sidebar:
