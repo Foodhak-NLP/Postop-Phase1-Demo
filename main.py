@@ -106,9 +106,9 @@ DEVIATION_RULE_ROWS = [
 
 SCENARIOS: Dict[str, Dict[str, Any]] = {
     "haemostasis_walkthrough": {
-        "label": "1. Haemostasis documentation walkthrough",
+        "label": "1. Haemostasis walkthrough",
         "expected_phase": "haemostasis",
-        "description": "Immediate post-op documentation example. Focus: clot formation window, vitals stabilisation, blood loss visibility, hydration/electrolyte monitoring.",
+        "description": "Immediate post-op example. Focus: clot formation window, vitals stabilisation, blood loss visibility, hydration/electrolyte monitoring.",
         "patient_id": "P0001", "age": 49, "sex": "female", "surgery_type": "abdominal", "asa_score": 2, "bmi": 27.1,
         "weight_kg": 70.0, "diabetes_status": False, "nrs_2002_score": 1, "day_post_op": 0,
         "vitals": {"heart_rate": 92, "temperature": 36.8, "spo2": 98},
@@ -117,9 +117,9 @@ SCENARIOS: Dict[str, Dict[str, Any]] = {
         "self_report": {"pain_score": 5, "appetite": "not_started", "nausea": False},
     },
     "inflammation_walkthrough": {
-        "label": "2. Inflammation documentation walkthrough",
+        "label": "2. Inflammation walkthrough",
         "expected_phase": "inflammation",
-        "description": "Day 3 documentation example. CRP/WBC and mild temperature/HR activity make the phase posterior favour inflammation.",
+        "description": "Day 3 example. CRP/WBC and mild temperature/HR activity make the phase posterior favour inflammation.",
         "patient_id": "P0101", "age": 44, "sex": "female", "surgery_type": "abdominal", "asa_score": 1, "bmi": 24.8,
         "weight_kg": 68.0, "diabetes_status": False, "nrs_2002_score": 1, "day_post_op": 3,
         "vitals": {"heart_rate": 101, "temperature": 38.1, "spo2": 98},
@@ -128,7 +128,7 @@ SCENARIOS: Dict[str, Dict[str, Any]] = {
         "self_report": {"pain_score": 4, "appetite": "fair", "nausea": False},
     },
     "proliferation_walkthrough": {
-        "label": "3. Proliferation documentation walkthrough",
+        "label": "3. Proliferation walkthrough",
         "expected_phase": "proliferation",
         "description": "Day 8 example. CRP/WBC are declining and prealbumin is rising, then Layer 3 checks high-demand collagen-synthesis nutrition targets.",
         "patient_id": "P0042", "age": 58, "sex": "unknown", "surgery_type": "abdominal", "asa_score": 2, "bmi": 31.0,
@@ -139,9 +139,9 @@ SCENARIOS: Dict[str, Dict[str, Any]] = {
         "self_report": {"pain_score": 3, "appetite": "reduced", "nausea": False},
     },
     "remodelling_walkthrough": {
-        "label": "4. Remodelling documentation walkthrough",
+        "label": "4. Remodelling walkthrough",
         "expected_phase": "remodelling",
-        "description": "Day 24 documentation example. Labs and vitals are normalising, pain is low, and Layer 1 favours remodelling.",
+        "description": "Day 24 example. Labs and vitals are normalising, pain is low, and Layer 1 favours remodelling.",
         "patient_id": "P0300", "age": 51, "sex": "male", "surgery_type": "abdominal", "asa_score": 2, "bmi": 26.2,
         "weight_kg": 72.0, "diabetes_status": False, "nrs_2002_score": 1, "day_post_op": 24,
         "vitals": {"heart_rate": 78, "temperature": 36.9, "spo2": 98},
@@ -1165,7 +1165,7 @@ def build_macro_recipe_recommendation(result: Mapping[str, Any]) -> Dict[str, An
 # STREAMLIT UI
 # ═══════════════════════════════════════════════════════════════════════════════
 
-st.markdown("# 🩹 Phase 1 Wound/Tissue Recovery Demo")
+st.markdown("#Phase 1 Wound/Tissue Recovery Demo")
 st.caption("Standalone inpatient wound monitoring demo: Layer 1 HMM-style phase estimation → Layer 2 responsive trajectory deviation detection → Layer 3 rule-based nutrition gap scoring.")
 
 with st.sidebar:
@@ -1173,7 +1173,7 @@ with st.sidebar:
     st.caption(f"App version: `{APP_VERSION}`")
     st.caption("Standalone file: no external project scripts required.")
 
-    scenario_key = st.selectbox("Documentation walkthrough", list(SCENARIOS.keys()), format_func=lambda k: SCENARIOS[k]["label"], index=0)
+    scenario_key = st.selectbox("Walkthrough", list(SCENARIOS.keys()), format_func=lambda k: SCENARIOS[k]["label"], index=0)
     demo = SCENARIOS[scenario_key]
     st.info(demo["description"])
 
@@ -1269,7 +1269,7 @@ with profile_cols[5]: st.metric("Overall priority", f"{priority_icon(priority)} 
 if expected_phase and str(phase).lower() != str(expected_phase).lower():
     st.warning(f"The selected walkthrough is **{expected_phase}**, but current slider values make Layer 1 estimate **{phase}**. This is allowed for experimentation; reset the scenario values for the clean walkthrough.")
 else:
-    st.success("Documentation walkthrough and Layer 1 phase estimate are aligned.")
+    st.success("Walkthrough and Layer 1 phase estimate are aligned.")
 
 st.markdown("### 🧭 How the three layers connect")
 flow_cols = st.columns([1, 0.16, 1, 0.16, 1])
