@@ -1,18 +1,3 @@
-"""
-Phase 1 Wound/Tissue Recovery — Streamlit Demo Standalone v014
-================================================================
-
-One-file doctor-facing demo for the three Phase-1 layers only:
-  Layer 1: Healing Phase Estimator (HMM-style interpretable phase posterior)
-  Layer 2: Deviation Detector (trajectory bands + clinical deviation rules)
-  Layer 3: Nutritional Gap Engine (rule-based phase-specific target scoring)
-
-No external project modules are required.
-No Phase-2 logic is included.
-
-Run:
-  streamlit run phase1_wound_recovery_streamlit_demo_standalone_014.py
-"""
 from __future__ import annotations
 
 import copy
